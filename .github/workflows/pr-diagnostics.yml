@@ -1,0 +1,104 @@
+name: Pull Request Diagnostics
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  pr-diagnostics:
+    name: PR Diagnostics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl-dev libglu-dev libx11-xcb-dev libxkbcommon-x11-dev \
+            libpcre2-dev libfreetype6-dev libpng-dev libjpeg-dev \
+            libsqlite3-dev libharfbuzz-dev libb2-dev double-conversion \
+            ninja-build ccache clang-tidy cppcheck python3-pip
+          pip3 install semgrep safety
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DQUANTUMVERSE_BUILD_TESTS=ON \
+            -DQUANTUMVERSE_USE_RAPIDCHECK=ON \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_FLAGS="-Wall -Wextra -Werror"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run GR validation tests
+        working-directory: build
+        run: |
+          ctest -R "Mercury|Light|Redshift|Frame" --output-on-failure -j $(nproc)
+
+      - name: Run property-based tests
+        working-directory: build
+        run: |
+          ctest -R "pbt" --output-on-failure -j $(nproc)
+
+      - name: Run ASan fast subset
+        working-directory: build
+        run: |
+          cmake -B build_san -DCMAKE_BUILD_TYPE=Debug \
+            -DQUANTUMVERSE_BUILD_TESTS=ON \
+            -DQUANTUMVERSE_USE_ASAN=ON \
+            -DCMAKE_CXX_FLAGS_DEBUG="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS_DEBUG="-fsanitize=address"
+          cmake --build build_san --config Debug --parallel
+          cd build_san
+          export ASAN_OPTIONS=detect_leaks=0:halt_on_error=1:symbolize=1
+          timeout 300 ctest --output-on-failure -j $(nproc) || true
+
+      - name: Run UBSan fast subset
+        working-directory: build
+        run: |
+          cmake -B build_ubsan -DCMAKE_BUILD_TYPE=Debug \
+            -DQUANTUMVERSE_BUILD_TESTS=ON \
+            -DQUANTUMVERSE_USE_UBSAN=ON \
+            -DCMAKE_CXX_FLAGS_DEBUG="-fsanitize=undefined -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS_DEBUG="-fsanitize=undefined"
+          cmake --build build_ubsan --config Debug --parallel
+          cd build_ubsan
+          export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+          timeout 300 ctest --output-on-failure -j $(nproc) || true
+
+      - name: Static analysis (clang-tidy)
+        working-directory: build
+        run: |
+          clang-tidy -p . $(find ../src -name '*.cpp' -o -name '*.h') \
+            --checks='bugprone-*,performance-*,modernize-*,cppcoreguidelines-*,clang-analyzer-*' \
+            --warnings-as-errors='*' --quiet
+
+      - name: Static analysis (cppcheck)
+        run: |
+          cppcheck --enable=warning,style,performance,portability,information \
+            --inconclusive --suppress=missingIncludeSystem \
+            --platform=unix64 src/
+
+      - name: Semgrep quick scan
+        run: |
+          semgrep --config=p/security-audit --error src/ || true
+
+      - name: Coverage check
+        working-directory: build
+        run: |
+          cmake -B build_cov -DCMAKE_BUILD_TYPE=Debug \
+            -DQUANTUMVERSE_BUILD_TESTS=ON \
+            -DQUANTUMVERSE_USE_COVERAGE=ON
+          cmake --build build_cov --config Debug --parallel
+          cd build_cov
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info
+          lcov --remove coverage.info '*/third_party/*' --output-file coverage.info
+          lcov --remove coverage.info '*/tests/*' --output-file coverage.info
+          lcov --summary coverage.info
+          python3 ../../scripts/check_coverage.py coverage.info 90
