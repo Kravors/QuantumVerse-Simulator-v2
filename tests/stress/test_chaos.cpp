@@ -6,6 +6,10 @@
 #include "spacetime/MetricTensor.h"
 #include "spacetime/Event4D.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 using namespace quantumverse;
 
 std::atomic<bool> g_running(true);
@@ -27,8 +31,8 @@ void stressMinkowskiOperations() {
         metric.setToMinkowski();
         Event4D e1(0, 1, 2, 3);
         Event4D e2(1, 2, 3, 4);
-        double ds2 = metric.interval(e1, e2);
-        double proper = metric.properTime(e1, e2);
+        (void)metric.interval(e1, e2);
+        (void)metric.properTime(e1, e2);
     }
 }
 
