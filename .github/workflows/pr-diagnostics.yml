@@ -52,7 +52,7 @@ jobs:
       - name: Static analysis (clang-tidy)
         working-directory: build
         run: |
-          clang-tidy -p . src/utils/Telemetry.cpp \
+          clang-tidy -p . ../src/utils/Telemetry.cpp \
             --checks='bugprone-*,performance-*,modernize-*' \
             --warnings-as-errors='*' --quiet || true
 
