@@ -31,8 +31,8 @@ void stressMinkowskiOperations() {
         metric.setToMinkowski();
         Event4D e1(0, 1, 2, 3);
         Event4D e2(1, 2, 3, 4);
-        double ds2 = metric.interval(e1, e2);
-        double proper = metric.properTime(e1, e2);
+        (void)metric.interval(e1, e2);
+        (void)metric.properTime(e1, e2);
     }
 }
 
