@@ -20,8 +20,8 @@ jobs:
           sudo apt-get install -y \
             libgl-dev libglu-dev libx11-xcb-dev libxkbcommon-x11-dev \
             libpcre2-dev libfreetype6-dev libpng-dev libjpeg-dev \
-            libsqlite3-dev libharfbuzz-dev libb2-dev double-conversion \
-            ninja-build ccache clang-tidy cppcheck python3-pip
+            libsqlite3-dev libharfbuzz-dev libb2-dev \
+            libdouble-conversion-dev ninja-build ccache clang-tidy cppcheck python3-pip
           pip3 install semgrep safety
 
       - name: Configure CMake
