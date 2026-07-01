@@ -6,6 +6,10 @@
 #include "spacetime/MetricTensor.h"
 #include "spacetime/Event4D.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 using namespace quantumverse;
 
 std::atomic<bool> g_running(true);
